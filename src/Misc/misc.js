@@ -6,12 +6,12 @@ let debugSettings = {
   touchDetect: false,
   tapDetect: false,
   nearestToken: false,
-  updateMovement: true,
+  updateMovement: false,
   moveToken: false,
   dropToken: false,
-  baseData: true,
+  baseData: false,
   cal: false,
-  ruler: true
+  ruler: false
 };
 
 let batteryNotificationTimer = 0;
