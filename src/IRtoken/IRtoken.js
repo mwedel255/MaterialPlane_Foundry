@@ -202,7 +202,7 @@ export class IRtoken {
         }
 
         if (this.ruler.path === undefined || this.ruler.path.length == 0) {
-            debug('moveToken', `TokenDropDrop did not find path from ${tok.x}, ${tok.y} to ${newCoords.x}, ${newCoords.y}`);
+            debug('moveToken', `TokenDropDrop did not find path from ${this.token.x}, ${this.token.y} to ${newCoords.x}, ${newCoords.y}`);
         } else {
             this.previousPosition = this.currentGridSpace;
             let final_pos = this.ruler.path[this.ruler.path.length - 1];
@@ -257,7 +257,7 @@ export class IRtoken {
                     await this.token.document.update({movementAction: this.oldMovementAction});
                 else
                     game.socket.emit(`module.MaterialPlane`, {
-                        "msgType": "",
+                        "msgType": "setTokenMovementAction",
                         "senderId": game.user.id,
                         "receiverId": game.data.users.find(users => users.role == 4)._id,
                         "tokenId": this.token.id,
