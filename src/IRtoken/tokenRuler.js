@@ -53,8 +53,12 @@ export class DragRuler {
         // uses top left, the ruler uses top left, token is top left, so easier to just have everything
         // use that as the reference coordinates.
         const gridSize = canvas.dimensions.size;
-        const newpos = {x: position.x - gridsize/2, y: position.y - gridsize/2, snapped: true};
+        const newpos = {x: position.x - gridSize/2, y: position.y - gridSize/2, snapped: true};
         const tok = this.token;
+        let unreachableWaypoints = [];
+        let segments = [];
+
+        if (tok == undefined) return;
 
         debug('ruler', `findMovementPath calculating path from ${tok.x}, ${tok.y} to ${newpos.x}, ${newpos.y}`);
 
@@ -62,43 +66,49 @@ export class DragRuler {
         let waypoints = await pathJob.promise;
 
         // By default, findMovementPath() will return a path as far as it can.  Other modules may change this
-        // behavior and return all or nothing, so handle that scenario.
-        if (waypoints === undefined || waypoints.length == 0) {
+        // behavior and return all or nothing, so handle that scenario.  Wayfinder seems to just return a single
+        // waypoint if there is no path - that of the token itself.  It is still desirable to draw the dashed
+        // (unreachable) line in this case.
+        if (waypoints === undefined || waypoints.length < 2) {
             debug('ruler', `findMovementPath did not find path from ${tok.x}, ${tok.y} to ${newpos.x}, ${newpos.y}`);
             this.path = [];
-            return;
-        }
-        this.path = waypoints;
+            unreachableWaypoints = tok.document.getCompleteMovementPath([{x: tok.x, y: tok.y}, newpos]);
+        } else {
+            this.path = waypoints;
 
-        // The ruler needs to have every space as a waypoint to be drawn correctly, so use
-        // getCompleteMovementPath() to do that.
-        let segments = [];
-        for (let i=1; i<waypoints.length; i++) {
-            let intermediateWaypoints = tok.document.getCompleteMovementPath([waypoints[i - 1], waypoints[i]]);
+            // The ruler needs to have every space as a waypoint to be drawn correctly, so use
+            // getCompleteMovementPath() to do that.
+            for (let i = 1; i < waypoints.length; i++) {
+                let intermediateWaypoints = tok.document.getCompleteMovementPath([waypoints[i - 1], waypoints[i]]);
 
-            let intermediateSegments = intermediateWaypoints.map(obj => ({...obj, checkpoint: false, intermediate: true}));
+                let intermediateSegments = intermediateWaypoints.map(obj => ({
+                    ...obj,
+                    checkpoint: false,
+                    intermediate: true
+                }));
 
-            // The first and last segment need some special handling in order for the ruler to be drawn correctly.
-            intermediateSegments[0].checkpoint = true;
-            intermediateSegments[0].intermediate = false;
-            // Last segment also is not intermediate
-            intermediateSegments[intermediateSegments.length-1].intermediate = false;
-            segments.push(...intermediateSegments);
-        }
-        /**
-         * If the final point in the path calculated does not match the final desired coordinates,
-         * something must be blocking the path.  Calculate a path from that to final desired
-         * space and put that in unreachableWaypoints.  By default, foundry draws that as
-         * a dashed line.
-         */
-        let unreachableWaypoints = [];
-        const lastWaypoint = segments.at(-1);
+                // The first and last segment need some special handling in order for the ruler to be drawn correctly.
+                intermediateSegments[0].checkpoint = true;
+                intermediateSegments[0].intermediate = false;
+                // Last segment also is not intermediate
+                intermediateSegments[intermediateSegments.length - 1].intermediate = false;
+                segments.push(...intermediateSegments);
+            }
+            /**
+             * If the final point in the path calculated does not match the final desired coordinates,
+             * something must be blocking the path.  Calculate a path from that to final desired
+             * space and put that in unreachableWaypoints.  By default, foundry draws that as
+             * a dashed line.
+             */
+            unreachableWaypoints = [];
+            const lastWaypoint = segments.at(-1);
 
-        if (!comparePositions(newpos, lastWaypoint)) {
-            debug('ruler', `Path is blocked, last waypoint is ${lastWaypoint.x}, ${lastWaypoint.y}, target is ${newpos.x}, ${newpos.y}`);
+            if (!comparePositions(newpos, lastWaypoint)) {
+                debug('ruler', `Path is blocked, last waypoint is ${lastWaypoint.x}, ${lastWaypoint.y}, target is ${newpos.x}, ${newpos.y}`);
 
-            lastWaypoint.snapped = true;
-            unreachableWaypoints = tok.document.getCompleteMovementPath([lastWaypoint, newpos]);
+                lastWaypoint.snapped = true;
+                unreachableWaypoints = tok.document.getCompleteMovementPath([lastWaypoint, newpos]);
+            }
         }
 
         // If not drawing the ruler, do not need to deal with the unreachableWaypoints, as none of the data
@@ -128,10 +138,17 @@ export class DragRuler {
                     elevation: 0,
                     intermediate: true
                 }))
+
+            // If none of the planned movement is reachable, then the entire ruler is unreachable waypoints.
+            // In that case, need to set these values so it is properly used as a starting point.
+            if (segments.length == 0) {
+                unreachableWPDist[0].checkpoint = true;
+                unreachableWPDist[0].intermediate = false;
+            }
+
             unreachableWPDist[unreachableWaypoints.length - 1].checkpoint = true;
             unreachableWPDist[unreachableWaypoints.length - 1].intermediate = false;
         }
-
         /**
          * This is using the token's ruler property, which is a bit different from how the rest of this file deals
          * with it (using the canvas ruler).  This works for V13, not sure how well it would work on older
